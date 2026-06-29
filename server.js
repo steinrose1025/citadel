@@ -91,6 +91,7 @@ function statePayload(room, extra) {
       moveCount: room.moveCount,
       maxMoves: room.maxMoves,
       over: room.over,
+      started: room.started,
       names: names(room),
       remainingMs: room.deadline ? Math.max(0, room.deadline - Date.now()) : null,
     },

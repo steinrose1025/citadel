@@ -76,6 +76,18 @@ test("名前設定 → 部屋作成 → 入室で対戦開始", async () => {
   b.disconnect();
 });
 
+test("部屋作成直後の状態は started=false（相手待ち画面を維持するため）", async () => {
+  const a = io(URL);
+  await waitFor(a, "connect");
+  await new Promise((res) => a.emit("setName", "A", res));
+  const stateP = waitFor(a, "state");
+  await new Promise((res) => a.emit("createRoom", { maxMoves: 36 }, res));
+  const s = await stateP;
+  assert.strictEqual(s.started, false, "対戦相手が入るまでは started=false");
+  assert.strictEqual(s.over, false);
+  a.disconnect();
+});
+
 test("手番でない側の手は無視され、正しい手は反映される", async () => {
   const a = io(URL);
   const b = io(URL);

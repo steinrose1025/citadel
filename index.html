@@ -1239,6 +1239,11 @@ function ensureSocket(){
 }
 
 function applyServerState(s){
+  // 対戦開始前（相手待ち）の状態では、盤面に切り替えず待機画面を維持する
+  if(s.started===false && !s.over){
+    if(game.online) game.online.names = s.names;
+    return;
+  }
   closeNetOverlay();
   game.mode = "online";
   // 破壊・設置エフェクト（前盤面との差分）
