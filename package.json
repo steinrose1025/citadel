@@ -1,0 +1,21 @@
+{
+  "name": "citadel-online",
+  "version": "1.0.0",
+  "description": "CITADEL — 陣取り戦略ボード（ネット対戦対応）",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test --test-force-exit test/online.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}

@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CITADEL — 陣取り戦略ボード</title>
+<style>
+  :root{
+    --bg:#f4f6f9;
+    --panel:#ffffff;
+    --ink:#1f2733;
+    --muted:#7b869a;
+    --line:#e6e9f0;
+    --blue:#2563eb;
+    --blue-soft:rgba(37,99,235,0.14);
+    --blue-edge:rgba(37,99,235,0.40);
+    --red:#e23b4e;
+    --red-soft:rgba(226,59,78,0.14);
+    --red-edge:rgba(226,59,78,0.42);
+    --shadow:0 10px 30px rgba(31,39,51,0.08), 0 2px 8px rgba(31,39,51,0.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 12% -10%, #eef3ff 0%, transparent 55%),
+      radial-gradient(1000px 600px at 110% 10%, #fdeef0 0%, transparent 50%),
+      var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:28px 16px 56px;
+  }
+  .wrap{width:100%;max-width:600px;}
+  header.title{
+    text-align:center;
+    margin-bottom:18px;
+  }
+  header.title h1{
+    margin:0;
+    font-size:30px;
+    letter-spacing:.34em;
+    font-weight:800;
+    background:linear-gradient(90deg,var(--blue),#7a4bdc 50%,var(--red));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    padding-left:.34em;
+  }
+  header.title p{
+    margin:4px 0 0;
+    font-size:12px;
+    letter-spacing:.18em;
+    color:var(--muted);
+    text-transform:uppercase;
+  }
+
+  .scoreboard{
+    display:flex;
+    gap:12px;
+    margin-bottom:14px;
+  }
+  .score{
+    flex:1;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:12px 14px;
+    box-shadow:var(--shadow);
+    position:relative;
+    transition:transform .2s, box-shadow .2s, border-color .2s;
+  }
+  .score .who{
+    display:flex;align-items:center;gap:8px;
+    font-weight:700;font-size:14px;
+  }
+  .dot{width:12px;height:12px;border-radius:50%;display:inline-block;}
+  .score.blue .dot{background:var(--blue);}
+  .score.red  .dot{background:var(--red);}
+  .score .terr{
+    font-size:34px;font-weight:800;line-height:1.05;margin-top:6px;
+    font-variant-numeric:tabular-nums;
+  }
+  .score .sub{font-size:11px;color:var(--muted);margin-top:2px;}
+  .score.active{transform:translateY(-2px);}
+  .score.blue.active{border-color:var(--blue-edge);box-shadow:0 0 0 3px var(--blue-soft),var(--shadow);}
+  .score.red.active{border-color:var(--red-edge);box-shadow:0 0 0 3px var(--red-soft),var(--shadow);}
+
+  .boardCard{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:22px;
+    padding:10px;
+    box-shadow:var(--shadow);
+    position:relative;
+  }
+  canvas{
+    display:block;width:552px;height:552px;max-width:100%;height:auto;
+    border-radius:14px;cursor:pointer;touch-action:none;
+  }
+  #tooltip{
+    position:fixed;pointer-events:none;z-index:20;
+    background:rgba(20,26,36,0.92);color:#fff;
+    padding:6px 10px;border-radius:10px;font-size:12px;font-weight:600;
+    transform:translate(-50%,-130%);white-space:nowrap;
+    box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;transition:opacity .12s;
+  }
+
+  .status{
+    text-align:center;margin:14px 0 6px;font-size:14px;font-weight:600;
+    min-height:22px;
+  }
+
+  .controls{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:10px;margin-top:6px;
+  }
+  .field{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;
+    box-shadow:var(--shadow);
+  }
+  .field label{font-size:12px;color:var(--muted);font-weight:600;}
+  select{
+    border:1px solid var(--line);border-radius:9px;padding:6px 8px;
+    font-size:13px;font-weight:600;color:var(--ink);background:#fff;cursor:pointer;
+    font-family:inherit;
+  }
+  .btnrow{display:flex;gap:10px;margin-top:12px;}
+  button{
+    flex:1;border:none;border-radius:13px;padding:13px;font-size:14px;font-weight:700;
+    cursor:pointer;font-family:inherit;transition:transform .12s,filter .15s,background .15s;
+  }
+  button:active{transform:scale(.97);}
+  .btn-primary{background:linear-gradient(135deg,var(--blue),#4f7df6);color:#fff;box-shadow:0 6px 16px rgba(37,99,235,.32);}
+  .btn-ghost{background:#fff;color:var(--ink);border:1px solid var(--line);box-shadow:var(--shadow);}
+  .btn-ghost.on{background:var(--ink);color:#fff;}
+
+  .toggle{display:flex;align-items:center;gap:6px;}
+  .switch{
+    width:40px;height:22px;border-radius:20px;background:#cdd4e0;position:relative;
+    transition:background .2s;cursor:pointer;flex:none;
+  }
+  .switch.on{background:var(--blue);}
+  .switch::after{
+    content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+    background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.25);
+  }
+  .switch.on::after{left:20px;}
+
+  details.rules{
+    margin-top:16px;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:4px 16px;box-shadow:var(--shadow);
+  }
+  details.rules summary{cursor:pointer;font-weight:700;font-size:14px;padding:10px 0;outline:none;}
+  details.rules .body{font-size:13px;line-height:1.7;color:#3a4456;padding-bottom:10px;}
+  details.rules .body b{color:var(--ink);}
+  details.rules a{color:var(--blue);text-decoration:none;}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 10px;font-size:12px;color:var(--muted);}
+  .legend span{display:flex;align-items:center;gap:6px;}
+  .chip{width:14px;height:14px;border-radius:4px;display:inline-block;}
+
+  /* end overlay */
+  #overlay{
+    position:absolute;inset:10px;border-radius:14px;
+    background:rgba(247,249,252,0.86);backdrop-filter:blur(4px);
+    display:none;align-items:center;justify-content:center;flex-direction:column;
+    text-align:center;padding:24px;
+  }
+  #overlay.show{display:flex;animation:fade .3s ease;}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  #overlay .res{font-size:28px;font-weight:800;margin-bottom:6px;}
+  #overlay .det{font-size:14px;color:var(--muted);margin-bottom:18px;}
+
+  /* 手番タイマー */
+  #netTimer{
+    text-align:center;min-height:0;font-size:13px;font-weight:700;
+    color:var(--muted);font-variant-numeric:tabular-nums;
+    transition:color .2s;margin-bottom:4px;
+  }
+  #netTimer.warn{color:var(--red);animation:pulseT .8s infinite;}
+  @keyframes pulseT{50%{opacity:.45}}
+
+  /* ネット対戦オーバーレイ */
+  #netOverlay{
+    position:fixed;inset:0;z-index:50;
+    background:rgba(31,39,51,0.42);backdrop-filter:blur(6px);
+    display:none;align-items:center;justify-content:center;padding:18px;
+  }
+  #netOverlay.show{display:flex;animation:fade .25s ease;}
+  .net-card{
+    position:relative;width:100%;max-width:440px;
+    background:var(--panel);border:1px solid var(--line);border-radius:20px;
+    box-shadow:var(--shadow);padding:26px 24px;
+  }
+  .net-close{
+    position:absolute;top:12px;right:14px;width:30px;height:30px;flex:none;
+    border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--muted);
+    font-size:18px;line-height:1;padding:0;cursor:pointer;
+  }
+  .net-card h2{margin:0 0 6px;font-size:20px;font-weight:800;letter-spacing:.04em;}
+  .net-sub{margin:0 0 16px;font-size:13px;color:var(--muted);line-height:1.6;}
+  .net-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;}
+  .net-me{font-size:12px;font-weight:700;color:var(--blue);}
+  .net-card input[type="text"]{
+    width:100%;border:1px solid var(--line);border-radius:11px;padding:11px 12px;
+    font-size:14px;font-family:inherit;color:var(--ink);margin-bottom:12px;outline:none;
+  }
+  .net-card input[type="text"]:focus{border-color:var(--blue-edge);box-shadow:0 0 0 3px var(--blue-soft);}
+  .net-btn{width:100%;}
+  .net-create{display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:18px;}
+  .net-create input{margin-bottom:0;grid-column:1 / -1;}
+  .net-create select{height:100%;}
+  .net-create .net-btn{grid-column:1 / -1;}
+  .net-rooms-head{
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;
+  }
+  .net-refresh{
+    width:auto;flex:none;padding:5px 12px;font-size:12px;font-weight:700;
+    border-radius:9px;background:#fff;color:var(--ink);border:1px solid var(--line);
+  }
+  .net-rooms{
+    max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
+  }
+  .net-room{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fafbfd;
+  }
+  .net-room .info{min-width:0;}
+  .net-room .rn{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .net-room .meta{font-size:11px;color:var(--muted);margin-top:2px;}
+  .net-room button{
+    flex:none;width:auto;padding:8px 16px;font-size:13px;font-weight:700;border-radius:10px;
+    background:linear-gradient(135deg,var(--blue),#4f7df6);color:#fff;
+  }
+  .net-empty{font-size:13px;color:var(--muted);text-align:center;padding:18px 0;}
+  .net-msg{font-size:12px;color:var(--red);min-height:16px;margin-top:10px;text-align:center;}
+  .net-code{
+    text-align:center;font-size:40px;font-weight:800;letter-spacing:.18em;
+    color:var(--blue);font-variant-numeric:tabular-nums;margin:6px 0 18px;
+  }
+  .net-spinner{
+    width:34px;height:34px;border-radius:50%;margin:0 auto 20px;
+    border:4px solid var(--line);border-top-color:var(--blue);animation:spin 1s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="title">
+    <h1>CITADEL</h1>
+    <p>Territory Strategy &middot; 6 × 6</p>
+  </header>
+
+  <div class="scoreboard">
+    <div class="score blue active" id="scoreBlue">
+      <div class="who"><span class="dot"></span><span id="nameBlue">あなた (青)</span></div>
+      <div class="terr" id="terrBlue">0</div>
+      <div class="sub">領地 / 建物 <span id="bldBlue">0</span></div>
+    </div>
+    <div class="score red" id="scoreRed">
+      <div class="who"><span class="dot"></span><span id="nameRed">CPU (赤)</span></div>
+      <div class="terr" id="terrRed">0</div>
+      <div class="sub">領地 / 建物 <span id="bldRed">0</span></div>
+    </div>
+  </div>
+
+  <div class="boardCard">
+    <canvas id="board" width="552" height="552"></canvas>
+    <div id="overlay">
+      <div class="res" id="resTitle"></div>
+      <div class="det" id="resDetail"></div>
+      <button class="btn-primary" style="max-width:200px" onclick="newGame()">もう一度プレイ</button>
+    </div>
+  </div>
+
+  <div class="status" id="status">あなた（青）のターンです</div>
+  <div id="netTimer"></div>
+
+  <div class="legend">
+    <span><i class="chip" style="background:var(--blue-soft);border:1px solid var(--blue-edge)"></i>青の領地</span>
+    <span><i class="chip" style="background:var(--red-soft);border:1px solid var(--red-edge)"></i>赤の領地</span>
+    <span><i class="chip" style="background:#eef0f3;border:1px solid var(--line)"></i>中立</span>
+    <span><i class="chip" style="background:#fff;border:2px solid #d98e14"></i>包囲中（門が閉まる）</span>
+  </div>
+
+  <div class="controls">
+    <div class="field">
+      <label>対戦モード</label>
+      <select id="selMode">
+        <option value="ai" selected>CPU 対戦</option>
+        <option value="local">2人 (ローカル)</option>
+        <option value="online">ネット対戦</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>CPU タイプ</label>
+      <select id="selDiff">
+        <optgroup label="強さで選ぶ">
+          <option value="easy">かんたん</option>
+          <option value="normal" selected>ふつう</option>
+          <option value="hard">てごわい</option>
+        </optgroup>
+        <optgroup label="名将と戦う（強敵）">
+          <option value="galahad">ガラハッド卿 — 国境の覇者</option>
+          <option value="genghis">チンギス・ハン — 猛攻型</option>
+          <option value="maginot">マジノ卿 — 鉄壁の守り</option>
+        </optgroup>
+      </select>
+    </div>
+    <div class="field">
+      <label>ゲーム長 (手数)</label>
+      <select id="selLen">
+        <option value="24">短期決戦 (24)</option>
+        <option value="36" selected>標準 (36)</option>
+        <option value="48">長期戦 (48)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>影響力の数値</label>
+      <div class="toggle">
+        <span style="font-size:12px;color:var(--muted)">表示</span>
+        <div class="switch on" id="swInf"></div>
+      </div>
+    </div>
+    <div class="field">
+      <label>包囲状態の表示</label>
+      <div class="toggle">
+        <span style="font-size:12px;color:var(--muted)">表示</span>
+        <div class="switch on" id="swSiege"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="btnrow">
+    <button class="btn-primary" onclick="newGame()">新しいゲーム</button>
+    <button class="btn-ghost" id="btnUndo" onclick="undo()">ひとつ戻す</button>
+  </div>
+
+  <details class="rules">
+    <summary>遊び方とルール</summary>
+    <div class="body">
+      自分のターンに <b>①空きマスに城を建設</b> するか <b>②自分の建物を1ランク強化</b> します。<br>
+      建物は3段階：<b>Castle(影響力1)</b> → <b>Fortress(影響力2)</b> → <b>Citadel(影響力3)</b>。<br>
+      各建物は<b>自分のマス＋上下左右4マス</b>（斜めには効かない）へランク分の影響力を放射します。各マスは
+      <b>青の影響力合計 と 赤の影響力合計</b> を比べ、大きい方の領地（同点は中立）になります。<br>
+      1手ごとに <b>影響力再計算 → 支配権決定 → 城の破壊判定</b> を実行。
+      自分の建物のマスが相手領地に染まると、その建物は<b>破壊・消滅</b>します（中立なら耐え残る）。<br>
+      建物マスで敵の影響力が自分に並ぶと<b>包囲（Siege）状態</b>になり、<b>城門が閉じて</b>琥珀色の枠が明滅します。
+      敵があと一押しすれば陥落の危機です。表示はトグルでOFFにでき、OFFにすると原典同様に難易度が上がります。<br>
+      設定手数に達するか盤面が詰むと終了。<b>領地が多い方の勝ち</b>。<br>
+      マスにマウスを乗せると、置いた場合の領地変化を<b>予測ハイライト</b>します。<br>
+      <br>
+      <b>名将CPU（いずれも強敵）：</b><br>
+      ・<b>ガラハッド卿</b> … 多くの策略を知る老練家。外周（国境）の領地確保を好み、攻めにくい安全地帯を押さえる。<br>
+      ・<b>チンギス・ハン</b> … 非常に攻撃的。敵城の破壊を狙い果敢に攻め込むが、その奔放さが自滅を招くことも。<br>
+      ・<b>マジノ卿</b> … 防御の達人。城を密集させ堅陣を敷き、包囲されかけても必ず新たな手を打ってくる。<br>
+      <br>
+      <b>ネット対戦：</b> 名前を入力してロビーに入り、部屋を作るか既存の部屋に入って対戦します。
+      手番の<b>持ち時間は60秒</b>。60秒を超えると時間切れで<b>敗北</b>になります。
+    </div>
+  </details>
+</div>
+
+<!-- ================= ネット対戦オーバーレイ ================= -->
+<div id="netOverlay">
+  <div class="net-card">
+    <button class="net-close" id="netClose" title="閉じる">×</button>
+
+    <!-- 名前入力 -->
+    <div class="net-screen" id="netScreenName">
+      <h2>ネット対戦</h2>
+      <p class="net-sub">プレイヤー名を入力してロビーに入りましょう。</p>
+      <input type="text" id="netName" maxlength="16" placeholder="あなたの名前（最大16文字）" />
+      <button class="btn-primary net-btn" id="netEnter">ロビーに入る</button>
+      <div class="net-msg" id="netNameMsg"></div>
+    </div>
+
+    <!-- ロビー -->
+    <div class="net-screen" id="netScreenLobby" style="display:none">
+      <div class="net-head">
+        <h2>ロビー</h2>
+        <span class="net-me" id="netMe"></span>
+      </div>
+      <div class="net-create">
+        <input type="text" id="netRoomName" maxlength="24" placeholder="部屋の名前（任意）" />
+        <select id="netRoomLen">
+          <option value="24">短期 (24手)</option>
+          <option value="36" selected>標準 (36手)</option>
+          <option value="48">長期 (48手)</option>
+        </select>
+        <button class="btn-primary net-btn" id="netCreate">部屋を作る</button>
+      </div>
+      <div class="net-rooms-head">
+        <span>参加できる部屋</span>
+        <button class="net-refresh" id="netRefresh">更新</button>
+      </div>
+      <div class="net-rooms" id="netRooms"></div>
+      <div class="net-msg" id="netLobbyMsg"></div>
+    </div>
+
+    <!-- 入室待機 -->
+    <div class="net-screen" id="netScreenWait" style="display:none">
+      <h2>相手を待っています…</h2>
+      <p class="net-sub">この部屋コードを相手に伝えてください。</p>
+      <div class="net-code" id="netCode">----</div>
+      <div class="net-spinner"></div>
+      <button class="btn-ghost net-btn" id="netCancel">部屋を出る</button>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script src="game-logic.js"></script>
+<script>
+"use strict";
+
+/* ================= 共有ロジック（game-logic.js） ================= */
+const {
+  N, CELLS, ADJ_DIRS,
+  idx, inB, makeBoard, cloneBoard, other,
+  computeInfluence, computeSiege, computeTerritory, resolve,
+  validMoves, moveFor, applyMove, countBuildings, countTerritory,
+} = window.GameLogic;
+
+/* ================= 定数 ================= */
+const PAD = 16, GAP = 8, CELL = 80;
+const W = PAD * 2 + N * CELL + (N - 1) * GAP; // 552
+const H = W;
+
+const COL = {
+  blue:"#2563eb", red:"#e23b4e",
+  blueSoft:"rgba(37,99,235,0.16)", redSoft:"rgba(226,59,78,0.16)",
+  blueEdge:"rgba(37,99,235,0.42)", redEdge:"rgba(226,59,78,0.42)",
+  neutral:"#eef0f3", neutralEdge:"#e2e5ea"
+};
+
+/* ================= 状態 ================= */
+const game = {
+  board: [],            // {owner:null|'blue'|'red', rank:0..3}
+  current: "blue",
+  mode: "ai",
+  difficulty: "normal",
+  maxMoves: 36,
+  moveCount: 0,
+  over: false,
+  thinking: false,
+  showInf: true,
+  showSiege: true,
+  online: null,   // {color, roomId, deadline} ネット対戦時のみ
+};
+let history = [];
+let effects = [];        // {type:'place'|'destroy', i, start}
+let hoverCell = -1;
+let hoverPreview = null;  // {move, changed:Set, delta, selfDestroy, ghostRank}
+
+/* ================= AI ================= */
+/* CPU プロファイル
+   depth  : 読みの深さ(1=貪欲, 2=相手の最善応手まで読むミニマックス)
+   random : ランダム手を選ぶ確率
+   w      : 評価関数の重み(個性)
+     terr     領地差 / kill 敵建物破壊 / loss 自軍損失の回避
+     border   国境(外周)の領地支配を重視
+     edgeBuild 外周・隅への建設を好む(攻めにくい安全地帯)
+     adjEnemy 敵建物に隣接して圧をかける(攻撃志向)
+     aggrRank 高ランク化(攻撃力)を好む
+     safety   自建物の影響力マージン(堅さ)を重視
+     vuln     包囲されやすい自建物(マージン僅少)を嫌う
+     cluster  自建物どうしを密集させ守り合う
+*/
+const PROFILES = {
+  easy:    {depth:1, random:0.45, name:"CPU・初級",   w:{terr:10, kill:4,  loss:7}},
+  normal:  {depth:1, random:0,    name:"CPU・中級",   w:{terr:10, kill:4,  loss:7}},
+  hard:    {depth:2, random:0,    name:"CPU・上級",   w:{terr:10, kill:4,  loss:7}},
+  // ── 戦略指向の強敵たち ──
+  galahad: {depth:2, random:0,    name:"ガラハッド卿", w:{terr:10, kill:4,  loss:8,  border:2.4, edgeBuild:1.6, safety:0.6}},
+  genghis: {depth:2, random:0,    name:"チンギス・ハン", w:{terr:9,  kill:14, loss:2.5, adjEnemy:1.4, aggrRank:1.0}},
+  maginot: {depth:2, random:0,    name:"マジノ卿",     w:{terr:10, kill:5,  loss:12, safety:1.8, vuln:3.2, cluster:1.0}},
+};
+
+/* 盤面そのものを player 視点で評価（個性の重み付き） */
+function evalPosition(b, player, w){
+  const opp=other(player);
+  const {bi,ri}=computeInfluence(b);
+  const myInf = player==="blue"?bi:ri;
+  const enInf = player==="blue"?ri:bi;
+
+  let me=0, op=0;
+  for(let i=0;i<CELLS;i++){
+    const bv=bi[i], rv=ri[i];
+    const t = bv>rv?"blue" : rv>bv?"red" : null;
+    if(t===player) me++; else if(t) op++;
+  }
+  let s = (me-op)*(w.terr||0);
+
+  // 外周(国境)の領地支配
+  if(w.border){
+    let bc=0;
+    for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+      if(r===0||r===N-1||c===0||c===N-1){
+        const i=idx(r,c);
+        const t = bi[i]>ri[i]?"blue" : ri[i]>bi[i]?"red" : null;
+        if(t===player) bc++;
+      }
+    }
+    s += bc*w.border;
+  }
+
+  // 建物単位の評価
+  if(w.edgeBuild||w.adjEnemy||w.aggrRank||w.safety||w.vuln||w.cluster){
+    for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+      const i=idx(r,c), cell=b[i];
+      if(cell.owner!==player) continue;
+      if(w.edgeBuild){
+        const corner=(r===0||r===N-1)&&(c===0||c===N-1);
+        const edge  = r===0||r===N-1||c===0||c===N-1;
+        if(corner) s+=w.edgeBuild*2; else if(edge) s+=w.edgeBuild;
+      }
+      if(w.aggrRank) s += cell.rank*w.aggrRank;
+      if(w.safety||w.vuln){
+        const margin = myInf[i]-enInf[i];
+        if(w.safety) s += margin*w.safety;
+        if(w.vuln && margin<=1) s -= w.vuln; // 包囲一歩手前で危険
+      }
+      if(w.adjEnemy||w.cluster){
+        let adjE=0, adjOwn=0;
+        for(const [dr,dc] of ADJ_DIRS){
+          const nr=r+dr, nc=c+dc; if(!inB(nr,nc)) continue;
+          const o=b[idx(nr,nc)].owner;
+          if(o===opp) adjE++; else if(o===player) adjOwn++;
+        }
+        if(w.adjEnemy) s += adjE*w.adjEnemy;
+        if(w.cluster)  s += adjOwn*w.cluster;
+      }
+    }
+  }
+  return s;
+}
+
+function aiMove(b, player, profileKey){
+  const prof = PROFILES[profileKey] || PROFILES.normal;
+  const w = prof.w;
+  const moves = validMoves(b, player);
+  if(moves.length===0) return null;
+  const opp = other(player);
+
+  if(prof.random && Math.random()<prof.random){
+    return moves[(Math.random()*moves.length)|0];
+  }
+
+  let best=[], bestScore=-Infinity;
+  for(const mv of moves){
+    const sim=cloneBoard(b);
+    applyMove(sim, mv, player); resolve(sim);
+    const oppBefore=countBuildings(b,opp), oppAfter=countBuildings(sim,opp);
+    const myExpect=countBuildings(b,player)+(mv.type==="build"?1:0);
+    const myAfter=countBuildings(sim,player);
+
+    let s;
+    if(prof.depth>=2){
+      // 相手の最善応手後の盤面で評価（ミニマックス）
+      const oppMoves=validMoves(sim, opp);
+      if(oppMoves.length===0){
+        s = evalPosition(sim, player, w);
+      } else {
+        let worst=Infinity;
+        for(const om of oppMoves){
+          const s2=cloneBoard(sim);
+          applyMove(s2, om, opp); resolve(s2);
+          const val=evalPosition(s2, player, w);
+          if(val<worst) worst=val;
+        }
+        s = worst;
+      }
+    } else {
+      s = evalPosition(sim, player, w);
+    }
+    s += (oppBefore-oppAfter)*(w.kill||0);   // 敵建物の破壊
+    s -= (myExpect-myAfter)*(w.loss||0);      // 自軍の損失を回避
+    s += Math.random()*0.5;                   // 同点ゆらぎ
+
+    if(s>bestScore){ bestScore=s; best=[mv]; }
+    else if(s===bestScore){ best.push(mv); }
+  }
+  return best[(Math.random()*best.length)|0];
+}
+
+/* ================= ゲーム進行 ================= */
+function pushHistory(){
+  history.push(JSON.stringify({
+    board: game.board.map(c=>({owner:c.owner,rank:c.rank})),
+    current: game.current, moveCount: game.moveCount
+  }));
+  if(history.length>200) history.shift();
+}
+function restore(snap){
+  game.board = snap.board.map(c=>({owner:c.owner,rank:c.rank}));
+  game.current = snap.current;
+  game.moveCount = snap.moveCount;
+}
+
+function isHumanTurn(){
+  if(game.over || game.thinking) return false;
+  if(game.mode==="online"){
+    return !!(game.online && game.online.color && game.current===game.online.color);
+  }
+  if(game.mode==="ai" && game.current==="red") return false;
+  return true;
+}
+
+function makeMove(mv){
+  const player=game.current;
+  pushHistory();
+  applyMove(game.board, mv, player);
+  effects.push({type:"place", i:mv.i, start:performance.now()});
+  const destroyed=resolve(game.board);
+  const now=performance.now();
+  for(const i of destroyed) effects.push({type:"destroy", i, start:now});
+  game.moveCount++;
+
+  game.current = other(player);
+  clearHover();
+
+  // 相手に有効手が無ければパス（盤面が詰みかけの稀ケース）
+  if(validMoves(game.board, game.current).length===0 &&
+     validMoves(game.board, other(game.current)).length>0){
+    game.current = other(game.current);
+  }
+
+  checkOver();
+  updateUI();
+
+  if(!game.over && game.mode==="ai" && game.current==="red"){
+    scheduleAI();
+  }
+}
+
+function checkOver(){
+  const reached = game.maxMoves>0 && game.moveCount>=game.maxMoves;
+  const noMoves = validMoves(game.board,"blue").length===0 &&
+                  validMoves(game.board,"red").length===0;
+  if(reached || noMoves){ game.over=true; finalize(); }
+}
+
+function scheduleAI(){
+  game.thinking=true; updateUI();
+  setTimeout(()=>{
+    if(game.over){ game.thinking=false; return; }
+    const mv=aiMove(game.board, "red", game.difficulty);
+    game.thinking=false;
+    if(mv) makeMove(mv);
+    else { checkOver(); updateUI(); }
+  }, 480);
+}
+
+function finalize(){
+  const t=computeTerritory(game.board);
+  const {blue,red}=countTerritory(t);
+  const ov=document.getElementById("overlay");
+  const title=document.getElementById("resTitle");
+  const det=document.getElementById("resDetail");
+  if(blue>red){ title.textContent="🏆 青の勝利！"; title.style.color=COL.blue; }
+  else if(red>blue){ title.textContent="🏆 赤の勝利！"; title.style.color=COL.red; }
+  else { title.textContent="引き分け"; title.style.color="#5a6577"; }
+  det.textContent = `領地  青 ${blue}  —  赤 ${red}`;
+  // オンライン用に差し替えられている場合に備えてボタンを元に戻す
+  const btn = ov.querySelector("button");
+  btn.textContent = "もう一度プレイ";
+  btn.onclick = newGame;
+  ov.classList.add("show");
+}
+
+function newGame(){
+  game.mode=document.getElementById("selMode").value;
+  game.difficulty=document.getElementById("selDiff").value;
+  game.maxMoves=parseInt(document.getElementById("selLen").value,10);
+
+  if(game.mode==="online"){
+    // ネット対戦はサーバー主導。ローカルでは開始せずロビーを開く。
+    openNetOverlay();
+    return;
+  }
+
+  netLeaveIfNeeded();
+  game.online=null;
+  game.board=makeBoard();
+  game.current="blue";
+  game.moveCount=0;
+  game.over=false;
+  game.thinking=false;
+  history=[]; effects=[]; clearHover();
+  stopTurnTicker();
+  document.getElementById("overlay").classList.remove("show");
+  const aiName = (PROFILES[game.difficulty] && PROFILES[game.difficulty].name) || "CPU";
+  document.getElementById("nameRed").textContent = game.mode==="ai" ? aiName+" (赤)" : "プレイヤー2 (赤)";
+  document.getElementById("nameBlue").textContent = game.mode==="ai" ? "あなた (青)" : "プレイヤー1 (青)";
+  updateUI();
+}
+
+function undo(){
+  if(game.mode==="online") return;   // ネット対戦では「戻す」は使えない
+  if(game.thinking) return;
+  if(history.length===0) return;
+  restore(JSON.parse(history.pop()));
+  // CPU戦で赤(AI)番に戻ったら、もう一手戻して自分の番へ
+  if(game.mode==="ai" && game.current==="red" && history.length>0){
+    restore(JSON.parse(history.pop()));
+  }
+  game.over=false; game.thinking=false;
+  document.getElementById("overlay").classList.remove("show");
+  clearHover(); updateUI();
+}
+
+/* ================= 予測ガイド ================= */
+function computePreview(i){
+  const player=game.current;
+  const mv=moveFor(game.board, player, i);
+  if(!mv){ hoverPreview=null; return; }
+  const baseT=computeTerritory(game.board);
+  const sim=cloneBoard(game.board);
+  applyMove(sim, mv, player);
+  resolve(sim);
+  const newT=computeTerritory(sim);
+  const changed=new Set();
+  let before=0, after=0;
+  for(let k=0;k<CELLS;k++){
+    if(baseT[k]!==newT[k]) changed.add(k);
+    if(baseT[k]===player) before++;
+    if(newT[k]===player) after++;
+  }
+  const selfDestroy = (sim[i].owner===null);
+  const ghostRank = mv.type==="build" ? 1 : Math.min(3, game.board[i].rank+1);
+  hoverPreview={move:mv, changed, delta:after-before, selfDestroy, ghostRank, newT};
+}
+function clearHover(){ hoverCell=-1; hoverPreview=null; document.getElementById("tooltip").style.opacity=0; }
+
+/* ================= 描画 ================= */
+const canvas=document.getElementById("board");
+const ctx=canvas.getContext("2d");
+
+function cellX(c){ return PAD + c*(CELL+GAP); }
+function cellY(r){ return PAD + r*(CELL+GAP); }
+
+function rr(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function shade(hex, p){
+  const n=parseInt(hex.slice(1),16);
+  let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  r=Math.max(0,Math.min(255,r+p)); g=Math.max(0,Math.min(255,g+p)); b=Math.max(0,Math.min(255,b+p));
+  return `rgb(${r},${g},${b})`;
+}
+
+/* 城/要塞/城塞のアイコン（ランクで形が変化）
+   besieged=true のとき城門を閉じて描画（包囲状態） */
+function drawBuilding(cx, cy, owner, rank, alpha, scale, besieged){
+  const base = owner==="blue" ? COL.blue : COL.red;
+  const dark = shade(base,-34);
+  const light= shade(base, 30);
+  ctx.save();
+  ctx.translate(cx,cy);
+  if(scale!==1){ ctx.scale(scale,scale); }
+  ctx.globalAlpha = alpha;
+  const S = CELL*0.74;          // building footprint
+  const ground = S*0.5;         // baseline (y) bottom
+  ctx.shadowColor="rgba(20,30,50,0.18)";
+  ctx.shadowBlur=8; ctx.shadowOffsetY=4;
+
+  // 共通：壁を描く（天端に銃眼）
+  function wall(x,y,w,h,merlons){
+    ctx.shadowBlur= (arguments[5]===false)?0:ctx.shadowBlur;
+    ctx.fillStyle=base;
+    rr(x,y,w,h,Math.min(5,w/4)); ctx.fill();
+    // 立体ハイライト
+    ctx.fillStyle=light; ctx.globalAlpha=alpha*0.18;
+    rr(x,y,w*0.5,h,Math.min(5,w/4)); ctx.fill();
+    ctx.globalAlpha=alpha;
+    // 銃眼（merlons）
+    ctx.fillStyle=base;
+    const mh=Math.max(5,h*0.26);
+    const unit=w/(merlons*2-1);
+    for(let i=0;i<merlons;i++){
+      const mx=x+i*2*unit;
+      ctx.fillRect(mx, y-mh, unit, mh+1);
+    }
+    ctx.shadowBlur=0;
+  }
+  function door(x,bottom,w,h){
+    ctx.shadowBlur=0;
+    // アーチ形の門口
+    ctx.beginPath();
+    ctx.moveTo(x,bottom);
+    ctx.lineTo(x,bottom-h+w/2);
+    ctx.arc(x+w/2,bottom-h+w/2,w/2,Math.PI,0);
+    ctx.lineTo(x+w,bottom);
+    ctx.closePath();
+    if(!besieged){
+      // 開いた門（暗い開口部）
+      ctx.fillStyle=dark;
+      ctx.fill();
+    } else {
+      // 閉じた城門：木製の扉＋落とし格子（ポートカリス）
+      ctx.save();
+      ctx.clip();
+      ctx.fillStyle="#8a6a45";                       // 扉（木）
+      ctx.fillRect(x,bottom-h,w,h);
+      ctx.strokeStyle="rgba(60,42,24,0.85)";          // 格子
+      ctx.lineWidth=Math.max(1.4,w*0.09);
+      ctx.beginPath();
+      const bars=3;
+      for(let k=1;k<=bars;k++){
+        const gx=x+(w*k)/(bars+1);
+        ctx.moveTo(gx,bottom-h); ctx.lineTo(gx,bottom);
+      }
+      for(let k=1;k<=2;k++){
+        const gy=bottom-(h*k)/3;
+        ctx.moveTo(x,gy); ctx.lineTo(x+w,gy);
+      }
+      ctx.stroke();
+      ctx.restore();
+      // 門枠
+      ctx.strokeStyle=dark; ctx.lineWidth=1.6;
+      ctx.stroke();
+    }
+  }
+
+  if(rank===1){
+    const w=S*0.6, h=S*0.5, x=-w/2, y=ground-h;
+    wall(x,y,w,h,3);
+    door(-w*0.16, ground, w*0.32, h*0.62);
+  } else if(rank===2){
+    const w=S*0.86, h=S*0.42, x=-w/2, y=ground-h;
+    // towers
+    const tw=S*0.22, th=S*0.6;
+    wall(-w/2, ground-th, tw, th, 2);
+    wall(w/2-tw, ground-th, tw, th, 2);
+    wall(x,y,w,h,5);
+    door(-w*0.13, ground, w*0.26, h*0.7);
+  } else {
+    const w=S*0.9, h=S*0.4, x=-w/2, y=ground-h;
+    const tw=S*0.22, th=S*0.6;
+    wall(-w/2, ground-th, tw, th, 2);
+    wall(w/2-tw, ground-th, tw, th, 2);
+    // central keep
+    const kw=S*0.3, kh=S*0.8;
+    wall(-kw/2, ground-kh, kw, kh, 3);
+    wall(x,y,w,h,5);
+    door(-w*0.12, ground, w*0.24, h*0.72);
+    // flag
+    ctx.shadowBlur=0;
+    ctx.strokeStyle=dark; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.moveTo(0,ground-kh); ctx.lineTo(0,ground-kh-S*0.22); ctx.stroke();
+    ctx.fillStyle=light;
+    ctx.beginPath();
+    ctx.moveTo(0,ground-kh-S*0.22);
+    ctx.lineTo(S*0.2,ground-kh-S*0.16);
+    ctx.lineTo(0,ground-kh-S*0.10);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawRankBadge(x,y,rank,owner){
+  const base=owner==="blue"?COL.blue:COL.red;
+  const bx=x+CELL-15, by=y+15, r=9;
+  ctx.beginPath(); ctx.arc(bx,by,r,0,Math.PI*2);
+  ctx.fillStyle="#fff"; ctx.fill();
+  ctx.lineWidth=2; ctx.strokeStyle=base; ctx.stroke();
+  ctx.fillStyle=base; ctx.font="bold 11px -apple-system,sans-serif";
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillText(rank, bx, by+0.5);
+}
+
+function render(){
+  const dpr=window.devicePixelRatio||1;
+  if(canvas.width!==W*dpr){ canvas.width=W*dpr; canvas.height=H*dpr; }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+
+  const {bi,ri}=computeInfluence(game.board);
+  const terr=computeTerritory(game.board);
+  const siege=game.showSiege ? computeSiege(game.board) : null;
+  const now=performance.now();
+  const prevT = hoverPreview ? hoverPreview.newT : null;
+
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+    const i=idx(r,c);
+    const x=cellX(c), y=cellY(r);
+    // 領地塗り（ホバー時は予測領地を表示）
+    const owner = prevT ? prevT[i] : terr[i];
+    let fill=COL.neutral, edge=COL.neutralEdge;
+    if(owner==="blue"){ fill=COL.blueSoft; edge=COL.blueEdge; }
+    else if(owner==="red"){ fill=COL.redSoft; edge=COL.redEdge; }
+    rr(x,y,CELL,CELL,12); ctx.fillStyle=fill; ctx.fill();
+    ctx.lineWidth=1.5; ctx.strokeStyle=edge; ctx.stroke();
+
+    // 建物
+    const cell=game.board[i];
+    if(cell.owner){
+      let scale=1;
+      const pe=effects.find(e=>e.type==="place"&&e.i===i);
+      if(pe){
+        const t=Math.min(1,(now-pe.start)/220);
+        scale=0.6+0.4*easeOut(t);
+        if(t>=1) effects=effects.filter(e=>e!==pe);
+      }
+      const isSieged = siege ? siege[i] : false;
+      if(isSieged){
+        // 包囲警告：ゆっくり明滅するアンバーのリング
+        const pulse = 0.5+0.5*Math.sin(now/420);
+        ctx.save();
+        ctx.lineWidth=2.6;
+        ctx.strokeStyle=`rgba(217,142,20,${0.35+0.45*pulse})`;
+        rr(x+3,y+3,CELL-6,CELL-6,10); ctx.stroke();
+        ctx.restore();
+      }
+      drawBuilding(x+CELL/2, y+CELL/2+6, cell.owner, cell.rank, 1, scale, isSieged);
+      drawRankBadge(x,y,cell.rank,cell.owner);
+    }
+
+    // 影響力数値
+    if(game.showInf && (bi[i]>0 || ri[i]>0)){
+      ctx.font="bold 11px -apple-system,sans-serif";
+      ctx.textBaseline="alphabetic";
+      ctx.textAlign="left";
+      ctx.fillStyle=COL.blue; ctx.globalAlpha=bi[i]>0?0.92:0.32;
+      ctx.fillText(bi[i], x+8, y+CELL-8);
+      ctx.globalAlpha=1;
+      ctx.textAlign="right";
+      ctx.fillStyle=COL.red; ctx.globalAlpha=ri[i]>0?0.92:0.32;
+      ctx.fillText(ri[i], x+CELL-8, y+CELL-8);
+      ctx.globalAlpha=1;
+    }
+  }
+
+  // 予測ガイド：変化するマスを点線でハイライト＋ゴースト建物
+  if(hoverPreview){
+    const off = (now/40)%16;
+    for(const k of hoverPreview.changed){
+      const x=cellX(k%N), y=cellY((k/N)|0);
+      const o=hoverPreview.newT[k];
+      ctx.save();
+      ctx.lineWidth=2.4;
+      ctx.strokeStyle = o==="blue"?COL.blue : o==="red"?COL.red : "#9aa4b5";
+      ctx.setLineDash([6,5]); ctx.lineDashOffset=-off;
+      rr(x+2,y+2,CELL-4,CELL-4,11); ctx.stroke();
+      ctx.restore();
+    }
+    // ゴースト
+    const gi=hoverPreview.move.i;
+    const gx=cellX(gi%N), gy=cellY((gi/N)|0);
+    drawBuilding(gx+CELL/2, gy+CELL/2+6, game.current, hoverPreview.ghostRank, 0.45, 1);
+    if(hoverPreview.selfDestroy){
+      ctx.save();
+      ctx.strokeStyle="rgba(226,59,78,0.9)"; ctx.lineWidth=4;
+      ctx.beginPath();
+      ctx.moveTo(gx+22,gy+22); ctx.lineTo(gx+CELL-22,gy+CELL-22);
+      ctx.moveTo(gx+CELL-22,gy+22); ctx.lineTo(gx+22,gy+CELL-22);
+      ctx.stroke(); ctx.restore();
+    }
+  }
+
+  // 破壊エフェクト
+  effects=effects.filter(e=>{
+    if(e.type!=="destroy") return true;
+    const t=(now-e.start)/620;
+    if(t>=1) return false;
+    const x=cellX(e.i%N), y=cellY((e.i/N)|0);
+    const cx=x+CELL/2, cy=y+CELL/2;
+    ctx.save();
+    ctx.globalAlpha=(1-t)*0.9;
+    ctx.strokeStyle="#ff5a6e"; ctx.lineWidth=3;
+    const rad=10+t*46;
+    ctx.beginPath(); ctx.arc(cx,cy,rad,0,Math.PI*2); ctx.stroke();
+    // X
+    const s=18*(1-t)+8;
+    ctx.lineWidth=4;
+    ctx.beginPath();
+    ctx.moveTo(cx-s,cy-s); ctx.lineTo(cx+s,cy+s);
+    ctx.moveTo(cx+s,cy-s); ctx.lineTo(cx-s,cy+s);
+    ctx.stroke();
+    ctx.restore();
+    return true;
+  });
+
+  requestAnimationFrame(render);
+}
+function easeOut(t){ return 1-Math.pow(1-t,3); }
+
+/* ================= UI 更新 ================= */
+function updateUI(){
+  const t=computeTerritory(game.board);
+  const {blue,red}=countTerritory(t);
+  document.getElementById("terrBlue").textContent=blue;
+  document.getElementById("terrRed").textContent=red;
+  document.getElementById("bldBlue").textContent="／建物 "+countBuildings(game.board,"blue");
+  document.getElementById("bldRed").textContent="／建物 "+countBuildings(game.board,"red");
+
+  document.getElementById("scoreBlue").classList.toggle("active", game.current==="blue" && !game.over);
+  document.getElementById("scoreRed").classList.toggle("active", game.current==="red" && !game.over);
+
+  const st=document.getElementById("status");
+  const remain = game.maxMoves>0 ? `（残り ${Math.max(0,game.maxMoves-game.moveCount)} 手）` : "";
+  const aiName = (PROFILES[game.difficulty] && PROFILES[game.difficulty].name) || "CPU";
+  if(game.over){
+    st.textContent = "ゲーム終了";
+  } else if(game.mode==="online"){
+    if(!game.online || !game.online.color){
+      st.textContent = "ロビーで対戦相手を探しましょう";
+    } else {
+      const myTurn = game.current===game.online.color;
+      const turnName = game.current==="blue"
+        ? document.getElementById("nameBlue").textContent
+        : document.getElementById("nameRed").textContent;
+      st.textContent = (myTurn ? "あなたの番です" : `${turnName} の番です`)+" "+remain;
+    }
+  } else if(game.thinking){
+    st.textContent = aiName+" が思考中… ";
+  } else if(game.current==="blue"){
+    st.textContent = (game.mode==="ai"?"あなた":"プレイヤー1")+"（青）のターン "+remain;
+  } else {
+    st.textContent = (game.mode==="ai"?aiName:"プレイヤー2")+"（赤）のターン "+remain;
+  }
+  document.getElementById("btnUndo").disabled = game.mode==="online" || history.length===0;
+}
+
+/* ================= 入力 ================= */
+function pointerToCell(clientX, clientY){
+  const rect=canvas.getBoundingClientRect();
+  const sx=W/rect.width, sy=H/rect.height;
+  const px=(clientX-rect.left)*sx, py=(clientY-rect.top)*sy;
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+    const x=cellX(c), y=cellY(r);
+    if(px>=x && px<=x+CELL && py>=y && py<=y+CELL) return idx(r,c);
+  }
+  return -1;
+}
+
+canvas.addEventListener("mousemove",(e)=>{
+  if(!isHumanTurn()){ if(hoverCell!==-1) clearHover(); return; }
+  const i=pointerToCell(e.clientX,e.clientY);
+  if(i!==hoverCell){
+    hoverCell=i;
+    if(i>=0 && moveFor(game.board, game.current, i)) computePreview(i);
+    else hoverPreview=null;
+  }
+  const tip=document.getElementById("tooltip");
+  if(hoverPreview){
+    tip.style.left=e.clientX+"px"; tip.style.top=e.clientY+"px";
+    if(hoverPreview.selfDestroy){
+      tip.textContent="⚠ 自滅（相手領地に陥落）";
+    } else {
+      const d=hoverPreview.delta;
+      tip.textContent=`領地 ${d>=0?"+":""}${d}`;
+    }
+    tip.style.opacity=1;
+  } else {
+    tip.style.opacity=0;
+  }
+});
+canvas.addEventListener("mouseleave",()=>{ clearHover(); });
+
+function handleCellAction(i){
+  if(!isHumanTurn()) return false;
+  if(i<0) return false;
+  const mv=moveFor(game.board, game.current, i);
+  if(!mv) return false;
+  if(game.mode==="online"){
+    if(socket) socket.emit("move", {i});
+    clearHover();
+  } else {
+    makeMove(mv);
+  }
+  return true;
+}
+
+canvas.addEventListener("click",(e)=>{
+  handleCellAction(pointerToCell(e.clientX,e.clientY));
+});
+// タッチ対応
+canvas.addEventListener("touchstart",(e)=>{
+  if(!isHumanTurn()) return;
+  const t=e.touches[0];
+  const i=pointerToCell(t.clientX,t.clientY);
+  if(i>=0 && moveFor(game.board, game.current, i)){
+    e.preventDefault();
+    handleCellAction(i);
+  }
+},{passive:false});
+
+/* 設定 */
+document.getElementById("swInf").addEventListener("click",function(){
+  game.showInf=!game.showInf;
+  this.classList.toggle("on", game.showInf);
+});
+document.getElementById("swSiege").addEventListener("click",function(){
+  game.showSiege=!game.showSiege;
+  this.classList.toggle("on", game.showSiege);
+});
+["selMode","selDiff","selLen"].forEach(id=>{
+  document.getElementById(id).addEventListener("change",()=>{
+    game.mode=document.getElementById("selMode").value;
+    game.difficulty=document.getElementById("selDiff").value;
+    game.maxMoves=parseInt(document.getElementById("selLen").value,10);
+    newGame();
+  });
+});
+
+/* ================= ネット対戦 ================= */
+let socket = null;
+let turnTicker = null;
+let ioLoading = false;
+
+/* 配信パスの自動判別：ルート("/")でもサブパス("/.../citadel/")でも動くようにする。
+   例) /httpsdocs/citadel/index.html → "/httpsdocs/citadel/" */
+const BASE_PATH = location.pathname.replace(/[^/]*$/, "");
+const SIO_PATH  = BASE_PATH + "socket.io"; // Socket.IO の接続パス（末尾スラッシュ無し）
+
+/* socket.io クライアントはサーバー配信時のみ遅延ロード（file:// では読み込まない） */
+function loadSocketIO(onReady){
+  if(typeof io !== "undefined"){ onReady(true); return; }
+  if(location.protocol === "file:"){ onReady(false); return; }
+  const existing = document.getElementById("sioScript");
+  if(existing){
+    existing.addEventListener("load", ()=>onReady(typeof io!=="undefined"));
+    return;
+  }
+  ioLoading = true;
+  const sc = document.createElement("script");
+  sc.id = "sioScript";
+  sc.src = BASE_PATH + "socket.io/socket.io.js";
+  sc.onload = ()=>{ ioLoading=false; onReady(typeof io!=="undefined"); };
+  sc.onerror = ()=>{ ioLoading=false; onReady(false); };
+  document.head.appendChild(sc);
+}
+
+const netEl = {
+  overlay:  document.getElementById("netOverlay"),
+  scrName:  document.getElementById("netScreenName"),
+  scrLobby: document.getElementById("netScreenLobby"),
+  scrWait:  document.getElementById("netScreenWait"),
+  name:     document.getElementById("netName"),
+  nameMsg:  document.getElementById("netNameMsg"),
+  me:       document.getElementById("netMe"),
+  roomName: document.getElementById("netRoomName"),
+  roomLen:  document.getElementById("netRoomLen"),
+  rooms:    document.getElementById("netRooms"),
+  lobbyMsg: document.getElementById("netLobbyMsg"),
+  code:     document.getElementById("netCode"),
+  timer:    document.getElementById("netTimer"),
+};
+
+function showNetScreen(which){
+  netEl.scrName.style.display  = which==="name"  ? "block" : "none";
+  netEl.scrLobby.style.display = which==="lobby" ? "block" : "none";
+  netEl.scrWait.style.display  = which==="wait"  ? "block" : "none";
+}
+function openNetOverlay(){
+  netEl.overlay.classList.add("show");
+  if(socket && socket.connected && socket.data && socket.data.named){
+    socket.emit("listRooms");
+    showNetScreen("lobby");
+  } else {
+    showNetScreen("name");
+    setTimeout(()=>netEl.name.focus(), 50);
+  }
+  // socket.io クライアントを先読み（接続準備）
+  loadSocketIO((ok)=>{
+    if(!ok){
+      netEl.nameMsg.textContent = "サーバーに接続できません。`node server.js` で起動し、表示されたURLから開いてください。";
+    }
+  });
+}
+function closeNetOverlay(){ netEl.overlay.classList.remove("show"); }
+
+function ensureSocket(){
+  if(socket) return socket;
+  if(typeof io === "undefined"){
+    netEl.nameMsg.textContent = "サーバーに接続できません（node server.js で起動してください）";
+    return null;
+  }
+  socket = io({ path: SIO_PATH });
+  socket.data = { named:false };
+
+  socket.on("connect", ()=>{ netEl.nameMsg.textContent=""; });
+  socket.on("disconnect", ()=>{
+    if(game.mode==="online"){
+      netEl.lobbyMsg.textContent = "接続が切れました。再接続を待っています…";
+    }
+  });
+
+  socket.on("rooms", (list)=> renderRooms(list));
+
+  socket.on("joined", ({color, room})=>{
+    game.online = { color, roomId: room.id, names:{} };
+    game.maxMoves = room.maxMoves;
+    netEl.code.textContent = room.id;
+    if(room.count < 2){
+      showNetScreen("wait");        // 相手待ち
+    }
+  });
+
+  socket.on("state", (s)=> applyServerState(s));
+
+  socket.on("gameOver", (res)=> showOnlineResult(res));
+
+  socket.on("opponentLeft", ()=>{
+    netEl.lobbyMsg.textContent = "";
+  });
+
+  socket.on("rematchOffer", ({from})=>{
+    if(game.online && from!==game.online.color){
+      const det=document.getElementById("resDetail");
+      det.textContent += "（相手が再戦を希望しています）";
+    }
+  });
+
+  socket.on("errorMsg", (m)=>{ netEl.lobbyMsg.textContent = m; });
+
+  return socket;
+}
+
+function applyServerState(s){
+  closeNetOverlay();
+  game.mode = "online";
+  // 破壊・設置エフェクト（前盤面との差分）
+  const now = performance.now();
+  if(s.lastMove && typeof s.lastMove.i==="number"){
+    effects.push({type:"place", i:s.lastMove.i, start:now});
+  }
+  if(Array.isArray(s.destroyed)){
+    for(const i of s.destroyed) effects.push({type:"destroy", i, start:now});
+  }
+  game.board = s.board.map(c=>({owner:c.owner, rank:c.rank}));
+  game.current = s.current;
+  game.moveCount = s.moveCount;
+  game.maxMoves = s.maxMoves;
+  game.over = !!s.over;
+  game.thinking = false;
+  if(game.online){ game.online.names = s.names; }
+
+  // 名前表示（自分が青/赤どちらでも、盤面の青=blue, 赤=red）
+  const myColor = game.online ? game.online.color : null;
+  const blueLabel = (s.names.blue || "青") + (myColor==="blue" ? "（あなた）" : "");
+  const redLabel  = (s.names.red  || "赤") + (myColor==="red"  ? "（あなた）" : "");
+  document.getElementById("nameBlue").textContent = blueLabel;
+  document.getElementById("nameRed").textContent  = redLabel;
+  document.getElementById("overlay").classList.remove("show");
+
+  // 手番タイマー
+  if(!game.over && s.remainingMs!=null){
+    game.online.deadline = Date.now() + s.remainingMs;
+    startTurnTicker();
+  } else {
+    stopTurnTicker();
+  }
+  clearHover();
+  updateUI();
+}
+
+function startTurnTicker(){
+  stopTurnTicker();
+  tickTurn();
+  turnTicker = setInterval(tickTurn, 250);
+}
+function stopTurnTicker(){
+  if(turnTicker){ clearInterval(turnTicker); turnTicker=null; }
+  netEl.timer.textContent = "";
+  netEl.timer.classList.remove("warn");
+}
+function tickTurn(){
+  if(game.mode!=="online" || !game.online || game.over){ stopTurnTicker(); return; }
+  const remain = Math.max(0, Math.ceil((game.online.deadline - Date.now())/1000));
+  const myTurn = game.current===game.online.color;
+  netEl.timer.textContent = (myTurn ? "あなたの持ち時間 " : "相手の持ち時間 ") + remain + "秒";
+  netEl.timer.classList.toggle("warn", remain<=10);
+}
+
+function showOnlineResult(res){
+  game.over = true;
+  stopTurnTicker();
+  const ov=document.getElementById("overlay");
+  const title=document.getElementById("resTitle");
+  const det=document.getElementById("resDetail");
+  const myColor = game.online ? game.online.color : null;
+  const { winner, reason, territory } = res;
+
+  if(winner==null){
+    title.textContent = "引き分け"; title.style.color="#5a6577";
+  } else {
+    const iWon = winner===myColor;
+    title.textContent = iWon ? "🏆 あなたの勝利！" : "敗北…";
+    title.style.color = winner==="blue" ? COL.blue : COL.red;
+  }
+  let detail = territory ? `領地  青 ${territory.blue}  —  赤 ${territory.red}` : "";
+  if(reason==="timeout")    detail += "（時間切れ）";
+  if(reason==="disconnect") detail += "（相手が退出）";
+  det.textContent = detail;
+
+  // 結果画面のボタンを差し替え
+  const btn = ov.querySelector("button");
+  btn.textContent = "ロビーに戻る";
+  btn.onclick = ()=>{ ov.classList.remove("show"); netLeaveIfNeeded(); openNetOverlay(); };
+  ov.classList.add("show");
+  updateUI();
+}
+
+function netLeaveIfNeeded(){
+  if(socket && socket.connected && game.online){
+    socket.emit("leaveRoom");
+  }
+  game.online = null;
+  stopTurnTicker();
+}
+
+function renderRooms(list){
+  if(!netEl.rooms) return;
+  netEl.rooms.innerHTML = "";
+  if(!list || list.length===0){
+    const e=document.createElement("div");
+    e.className="net-empty";
+    e.textContent="参加できる部屋はまだありません。新しく作ってみましょう。";
+    netEl.rooms.appendChild(e);
+    return;
+  }
+  for(const r of list){
+    const row=document.createElement("div"); row.className="net-room";
+    const info=document.createElement("div"); info.className="info";
+    const rn=document.createElement("div"); rn.className="rn"; rn.textContent=r.name;
+    const meta=document.createElement("div"); meta.className="meta";
+    meta.textContent=`コード ${r.id} ・ ${r.maxMoves}手 ・ ${r.count}/2人`;
+    info.appendChild(rn); info.appendChild(meta);
+    const join=document.createElement("button"); join.textContent="入る";
+    join.onclick=()=> doJoin(r.id);
+    row.appendChild(info); row.appendChild(join);
+    netEl.rooms.appendChild(row);
+  }
+}
+
+function doSetName(){
+  const s=ensureSocket();
+  if(!s) return;
+  const nm=(netEl.name.value||"").trim();
+  if(!nm){ netEl.nameMsg.textContent="名前を入力してください"; return; }
+  s.emit("setName", nm, (res)=>{
+    if(res && res.ok){
+      s.data.named = true;
+      netEl.me.textContent = "あなた：" + res.name;
+      netEl.nameMsg.textContent="";
+      showNetScreen("lobby");
+      s.emit("listRooms");
+    }
+  });
+}
+function doCreate(){
+  const s=ensureSocket();
+  if(!s) return;
+  const opts={ name: netEl.roomName.value, maxMoves: parseInt(netEl.roomLen.value,10) };
+  s.emit("createRoom", opts, (res)=>{
+    if(res && res.ok){ netEl.lobbyMsg.textContent=""; }
+    else { netEl.lobbyMsg.textContent = (res && res.error) || "部屋を作成できませんでした"; }
+  });
+}
+function doJoin(roomId){
+  const s=ensureSocket();
+  if(!s) return;
+  s.emit("joinRoom", roomId, (res)=>{
+    if(!(res && res.ok)){
+      netEl.lobbyMsg.textContent = (res && res.error) || "入室できませんでした";
+      s.emit("listRooms");
+    }
+  });
+}
+
+/* ネット対戦UIのイベント */
+document.getElementById("netEnter").addEventListener("click", doSetName);
+netEl.name.addEventListener("keydown",(e)=>{ if(e.key==="Enter") doSetName(); });
+document.getElementById("netCreate").addEventListener("click", doCreate);
+document.getElementById("netRefresh").addEventListener("click", ()=>{ if(socket) socket.emit("listRooms"); });
+document.getElementById("netCancel").addEventListener("click", ()=>{
+  netLeaveIfNeeded();
+  if(socket) socket.emit("listRooms");
+  showNetScreen("lobby");
+});
+document.getElementById("netClose").addEventListener("click", ()=>{
+  closeNetOverlay();
+  // ネット対戦に未参加ならCPU戦へ戻す
+  if(!game.online){
+    document.getElementById("selMode").value = "ai";
+    newGame();
+  }
+});
+
+/* ================= 起動 ================= */
+newGame();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
