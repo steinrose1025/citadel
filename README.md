@@ -50,9 +50,11 @@ npm start
 **詳しい本番デプロイ手順は [`DEPLOY.md`](DEPLOY.md) を参照してください**（既存ドメインのサブパス公開を想定）。
 PM2 での常駐起動には `ecosystem.config.js` を使います（`pm2 start ecosystem.config.js`）。
 
-Nginx テンプレート:
-- `deploy/nginx-citadel-subpath.conf` … 既存ドメインの**サブパス**（例 `/httpsdocs/citadel/`）に追加する `location`
-- `deploy/nginx-citadel.conf` … **独自ドメイン/サブドメイン**を丸ごとアプリに割り当てる場合の server ブロック
+リバースプロキシ設定テンプレート:
+- `deploy/apache-citadel-subpath.conf` … **Apache** で既存ドメインのサブパスに公開（vhostへ追記）
+- `deploy/citadel.htaccess` … Apache で vhost を編集できない場合の `.htaccess` 版
+- `deploy/nginx-citadel-subpath.conf` … **Nginx** でサブパス公開する場合の `location`
+- `deploy/nginx-citadel.conf` … Nginx で独自ドメイン/サブドメインを丸ごと割り当てる場合の server ブロック
 
 > クライアント(`index.html`)は表示中URLから配信パスを自動判別するため、ルート公開・サブパス公開のどちらでもコード変更なしで動作します。
 

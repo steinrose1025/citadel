@@ -1,0 +1,30 @@
+# CITADEL サブパス公開（Apache .htaccess 版）
+#
+# vhost を直接編集できない場合の代替。アプリ配置先（公開ディレクトリ配下）に
+#   /var/www/vhosts/example.com/httpsdocs/citadel/.htaccess
+# として置きます（このファイルを ".htaccess" にリネームしてコピー）。
+#
+# 公開URL: https://example.com/citadel/
+#   ※ DocumentRoot が httpsdocs のため、URLに "httpsdocs" は付きません。
+#
+# 前提:
+#  - mod_proxy / mod_proxy_http / mod_proxy_wstunnel / mod_rewrite が有効
+#      sudo a2enmod proxy proxy_http proxy_wstunnel rewrite && sudo systemctl reload apache2
+#  - 対象ディレクトリで AllowOverride に FileInfo（または All）が許可されていること
+#    （このサーバーは AllowOverride All のため利用可）
+#
+# .htaccess 内ではパスの prefix（citadel/）が自動的に取り除かれて評価されるため、
+# 末尾の Node 側パスはプレフィックス無しになります（例: game-logic.js → /game-logic.js）。
+
+RewriteEngine On
+
+# (1) Socket.IO の WebSocket アップグレード
+RewriteCond %{HTTP:Upgrade} =websocket [NC]
+RewriteRule ^socket\.io/(.*)$ ws://127.0.0.1:3000/socket.io/$1 [P,L]
+
+# (2) Socket.IO の HTTPポーリング
+RewriteCond %{HTTP:Upgrade} !=websocket [NC]
+RewriteRule ^socket\.io/(.*)$ http://127.0.0.1:3000/socket.io/$1 [P,L]
+
+# (3) ページ本体・静的ファイル（index.html, game-logic.js など）
+RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]

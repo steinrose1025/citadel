@@ -235,6 +235,9 @@
     flex:none;width:auto;padding:8px 16px;font-size:13px;font-weight:700;border-radius:10px;
     background:linear-gradient(135deg,var(--blue),#4f7df6);color:#fff;
   }
+  .net-room button.spectate{
+    background:#fff;color:var(--ink);border:1px solid var(--line);
+  }
   .net-empty{font-size:13px;color:var(--muted);text-align:center;padding:18px 0;}
   .net-msg{font-size:12px;color:var(--red);min-height:16px;margin-top:10px;text-align:center;}
   .net-code{
@@ -404,8 +407,8 @@
 
     <!-- 入室待機 -->
     <div class="net-screen" id="netScreenWait" style="display:none">
-      <h2>相手を待っています…</h2>
-      <p class="net-sub">この部屋コードを相手に伝えてください。</p>
+      <h2>対戦相手が入室するまでお待ちください</h2>
+      <p class="net-sub">この部屋コードを相手に伝えると入室してもらえます。</p>
       <div class="net-code" id="netCode">----</div>
       <div class="net-spinner"></div>
       <button class="btn-ghost net-btn" id="netCancel">部屋を出る</button>
@@ -1015,13 +1018,15 @@ function updateUI(){
   if(game.over){
     st.textContent = "ゲーム終了";
   } else if(game.mode==="online"){
-    if(!game.online || !game.online.color){
+    const turnName = game.current==="blue"
+      ? document.getElementById("nameBlue").textContent
+      : document.getElementById("nameRed").textContent;
+    if(game.online && game.online.spectator){
+      st.textContent = `観戦中：${turnName} の番です ${remain}`;
+    } else if(!game.online || !game.online.color){
       st.textContent = "ロビーで対戦相手を探しましょう";
     } else {
       const myTurn = game.current===game.online.color;
-      const turnName = game.current==="blue"
-        ? document.getElementById("nameBlue").textContent
-        : document.getElementById("nameRed").textContent;
       st.textContent = (myTurn ? "あなたの番です" : `${turnName} の番です`)+" "+remain;
     }
   } else if(game.thinking){
@@ -1166,6 +1171,8 @@ function showNetScreen(which){
   netEl.scrWait.style.display  = which==="wait"  ? "block" : "none";
 }
 function openNetOverlay(){
+  // 観戦中にロビーを開いた場合は、その部屋から抜けてから一覧表示
+  if(game.online && game.online.spectator){ netLeaveIfNeeded(); }
   netEl.overlay.classList.add("show");
   if(socket && socket.connected && socket.data && socket.data.named){
     socket.emit("listRooms");
@@ -1201,13 +1208,14 @@ function ensureSocket(){
 
   socket.on("rooms", (list)=> renderRooms(list));
 
-  socket.on("joined", ({color, room})=>{
-    game.online = { color, roomId: room.id, names:{} };
+  socket.on("joined", ({color, room, spectator})=>{
+    game.online = { color, roomId: room.id, names:{}, spectator: !!spectator };
     game.maxMoves = room.maxMoves;
     netEl.code.textContent = room.id;
-    if(room.count < 2){
-      showNetScreen("wait");        // 相手待ち
+    if(!spectator && room.count < 2){
+      showNetScreen("wait");        // 対戦相手の入室待ち
     }
+    // 観戦の場合は直後に届く state（applyServerState）でオーバーレイを閉じて盤面表示
   });
 
   socket.on("state", (s)=> applyServerState(s));
@@ -1281,8 +1289,17 @@ function stopTurnTicker(){
 function tickTurn(){
   if(game.mode!=="online" || !game.online || game.over){ stopTurnTicker(); return; }
   const remain = Math.max(0, Math.ceil((game.online.deadline - Date.now())/1000));
-  const myTurn = game.current===game.online.color;
-  netEl.timer.textContent = (myTurn ? "あなたの持ち時間 " : "相手の持ち時間 ") + remain + "秒";
+  let label;
+  if(game.online.spectator){
+    const turnName = game.current==="blue"
+      ? document.getElementById("nameBlue").textContent
+      : document.getElementById("nameRed").textContent;
+    label = turnName + " の持ち時間 ";
+  } else {
+    const myTurn = game.current===game.online.color;
+    label = myTurn ? "あなたの持ち時間 " : "相手の持ち時間 ";
+  }
+  netEl.timer.textContent = label + remain + "秒";
   netEl.timer.classList.toggle("warn", remain<=10);
 }
 
@@ -1293,10 +1310,17 @@ function showOnlineResult(res){
   const title=document.getElementById("resTitle");
   const det=document.getElementById("resDetail");
   const myColor = game.online ? game.online.color : null;
+  const spectator = game.online ? game.online.spectator : false;
   const { winner, reason, territory } = res;
 
   if(winner==null){
     title.textContent = "引き分け"; title.style.color="#5a6577";
+  } else if(spectator){
+    const wName = winner==="blue"
+      ? document.getElementById("nameBlue").textContent
+      : document.getElementById("nameRed").textContent;
+    title.textContent = "🏆 " + wName + " の勝利！";
+    title.style.color = winner==="blue" ? COL.blue : COL.red;
   } else {
     const iWon = winner===myColor;
     title.textContent = iWon ? "🏆 あなたの勝利！" : "敗北…";
@@ -1334,15 +1358,24 @@ function renderRooms(list){
     return;
   }
   for(const r of list){
+    const inProgress = r.started && !r.over;
     const row=document.createElement("div"); row.className="net-room";
     const info=document.createElement("div"); info.className="info";
     const rn=document.createElement("div"); rn.className="rn"; rn.textContent=r.name;
     const meta=document.createElement("div"); meta.className="meta";
-    meta.textContent=`コード ${r.id} ・ ${r.maxMoves}手 ・ ${r.count}/2人`;
+    meta.textContent = inProgress
+      ? `コード ${r.id} ・ ${r.maxMoves}手 ・ 対戦中`
+      : `コード ${r.id} ・ ${r.maxMoves}手 ・ ${r.count}/2人 募集中`;
     info.appendChild(rn); info.appendChild(meta);
-    const join=document.createElement("button"); join.textContent="入る";
-    join.onclick=()=> doJoin(r.id);
-    row.appendChild(info); row.appendChild(join);
+    const btn=document.createElement("button");
+    if(inProgress){
+      btn.textContent="観戦"; btn.classList.add("spectate");
+      btn.onclick=()=> doSpectate(r.id);
+    } else {
+      btn.textContent="入る";
+      btn.onclick=()=> doJoin(r.id);
+    }
+    row.appendChild(info); row.appendChild(btn);
     netEl.rooms.appendChild(row);
   }
 }
@@ -1377,6 +1410,16 @@ function doJoin(roomId){
   s.emit("joinRoom", roomId, (res)=>{
     if(!(res && res.ok)){
       netEl.lobbyMsg.textContent = (res && res.error) || "入室できませんでした";
+      s.emit("listRooms");
+    }
+  });
+}
+function doSpectate(roomId){
+  const s=ensureSocket();
+  if(!s) return;
+  s.emit("spectateRoom", roomId, (res)=>{
+    if(!(res && res.ok)){
+      netEl.lobbyMsg.textContent = (res && res.error) || "観戦できませんでした";
       s.emit("listRooms");
     }
   });

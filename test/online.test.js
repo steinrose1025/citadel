@@ -123,6 +123,50 @@ test("持ち時間超過で時間切れ敗北になる", async () => {
   b.disconnect();
 });
 
+test("対戦中の部屋はロビーに出て、観戦すると盤面を受信できる", async () => {
+  const a = io(URL);
+  const b = io(URL);
+  await Promise.all([waitFor(a, "connect"), waitFor(b, "connect")]);
+  await new Promise((res) => a.emit("setName", "A", res));
+  await new Promise((res) => b.emit("setName", "B", res));
+  const created = await new Promise((res) => a.emit("createRoom", { maxMoves: 36 }, res));
+  const startA = waitForState(a, (s) => s.names.blue !== "—" && s.names.red !== "—");
+  await new Promise((res) => b.emit("joinRoom", created.roomId, res));
+  await startA;
+
+  // 観戦者 c
+  const c = io(URL);
+  await waitFor(c, "connect");
+  await new Promise((res) => c.emit("setName", "観戦者", res));
+
+  // ロビー一覧に対戦中の部屋が出る
+  const rooms = await new Promise((res) => { c.emit("listRooms"); c.once("rooms", res); });
+  const target = rooms.find((r) => r.id === created.roomId);
+  assert.ok(target && target.started && !target.over, "対戦中の部屋が一覧に出る");
+
+  // 観戦開始 → joined(spectator) と現在のstateを受信
+  const joinedP = waitFor(c, "joined");
+  const stateP = waitFor(c, "state");
+  const sp = await new Promise((res) => c.emit("spectateRoom", created.roomId, res));
+  assert.ok(sp.ok, "観戦に成功する");
+  const j = await joinedP;
+  assert.strictEqual(j.color, null, "観戦者は手番色を持たない");
+  assert.strictEqual(j.spectator, true);
+  await stateP;
+
+  // 観戦者が move しても無視される（盤面は a の手でのみ進む）
+  const upd = waitForState(c, (s) => s.board[0].owner === "blue");
+  c.emit("move", { i: 5 });          // 無視される想定
+  a.emit("move", { i: 0 });          // 実際に進む
+  const s = await upd;
+  assert.strictEqual(s.board[0].owner, "blue");
+  assert.strictEqual(s.board[5].owner, null, "観戦者の手は反映されない");
+
+  a.disconnect();
+  b.disconnect();
+  c.disconnect();
+});
+
 test("対戦中に相手が切断すると残った側の勝ち", async () => {
   const a = io(URL);
   const b = io(URL);

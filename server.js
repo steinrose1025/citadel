@@ -55,8 +55,12 @@ function roomPublic(room) {
 function openRoomList() {
   const list = [];
   for (const room of rooms.values()) {
+    if (room.over) continue;
     const count = (room.players.blue ? 1 : 0) + (room.players.red ? 1 : 0);
-    if (!room.started && count < 2) list.push(roomPublic(room));
+    // 参加待ちの部屋（入室可）／対戦中の部屋（観戦可）の両方を返す
+    if ((!room.started && count < 2) || (room.started && !room.over)) {
+      list.push(roomPublic(room));
+    }
   }
   return list;
 }
@@ -79,8 +83,8 @@ function names(room) {
   };
 }
 
-function emitState(room, extra) {
-  const payload = Object.assign(
+function statePayload(room, extra) {
+  return Object.assign(
     {
       board: room.board,
       current: room.current,
@@ -92,7 +96,10 @@ function emitState(room, extra) {
     },
     extra || {}
   );
-  io.to(room.id).emit("state", payload);
+}
+
+function emitState(room, extra) {
+  io.to(room.id).emit("state", statePayload(room, extra));
 }
 
 function setTurnTimer(room) {
@@ -175,6 +182,7 @@ function leaveRoom(socket) {
   const room = rooms.get(roomId);
   socket.data.roomId = null;
   socket.data.color = null;
+  socket.data.spectator = false;
   socket.leave(roomId);
   if (!room) return;
 
@@ -203,6 +211,7 @@ io.on("connection", (socket) => {
   socket.data.name = "";
   socket.data.roomId = null;
   socket.data.color = null;
+  socket.data.spectator = false;
 
   socket.on("setName", (name, cb) => {
     socket.data.name = String(name || "").slice(0, 16).trim() || "プレイヤー";
@@ -282,6 +291,28 @@ io.on("connection", (socket) => {
       emitState(room);
     }
     broadcastRooms();
+  });
+
+  socket.on("spectateRoom", (roomId, cb) => {
+    const room = rooms.get(String(roomId));
+    if (!room) {
+      if (typeof cb === "function") cb({ ok: false, error: "部屋が見つかりません" });
+      return;
+    }
+    if (!room.started || room.over) {
+      if (typeof cb === "function") cb({ ok: false, error: "対戦中の部屋ではありません" });
+      return;
+    }
+    leaveRoom(socket);
+    socket.leave("lobby");
+    socket.join(room.id);
+    socket.data.roomId = room.id;
+    socket.data.color = null;       // 観戦者は手番を持たない
+    socket.data.spectator = true;
+    if (typeof cb === "function") cb({ ok: true, roomId: room.id });
+    socket.emit("joined", { roomId: room.id, color: null, spectator: true, room: roomPublic(room) });
+    // 現在の盤面を観戦者にだけ送る
+    socket.emit("state", statePayload(room));
   });
 
   socket.on("move", (data) => {
