@@ -2,3 +2,6 @@ node_modules/
 npm-debug.log*
 .env
 .DS_Store
+
+# 個人情報（実サーバーのドメイン/パス）を含むため公開しない
+DEPLOY.md

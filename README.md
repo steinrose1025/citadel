@@ -47,7 +47,6 @@ npm start
 リバースプロキシ（Nginx 等）を使う場合は、WebSocket のアップグレードを通す設定にしてください
 （テンプレート: `deploy/nginx-citadel.conf`）。
 
-**詳しい本番デプロイ手順は [`DEPLOY.md`](DEPLOY.md) を参照してください**（既存ドメインのサブパス公開を想定）。
 PM2 での常駐起動には `ecosystem.config.js` を使います（`pm2 start ecosystem.config.js`）。
 
 リバースプロキシ設定テンプレート:
